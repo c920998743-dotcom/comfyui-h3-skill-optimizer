@@ -7,11 +7,11 @@
 本包是自定义节点源码和工作流，不是 RunningHub 已上架应用。**上传 JSON 不会自动安装 Python 节点、模型或独立环境。**目前尚未核实你账号所在实例是否允许这些操作：
 
 - 安装本包的 ComfyUI 自定义节点及前端扩展；
-- 建立可执行的独立 Python 虚拟环境，安装依赖并启动子进程；
+- 在 ComfyUI 使用的 Python 环境中提供兼容依赖，并允许启动子进程；
 - 存放、读取完整 AWQ 模型目录；
 - 使用 CUDA 并释放之前加载的模型。
 
-若平台只有工作流编辑权限，需要通过 RunningHub 支持的节点安装/提交渠道或平台工作人员完成环境部署。不要直接在现有 H3 Python 环境降级 Transformers。节点缺失或环境不存在时，这份 JSON 不能单独运行。
+若平台只有工作流编辑权限，需要通过 RunningHub 支持的节点安装/提交渠道或平台工作人员完成环境部署。先核实依赖兼容性，不要直接在现有 H3 Python 环境降级 Transformers。节点缺失或环境不存在时，这份 JSON 不能单独运行。
 
 ## 交付内容
 
@@ -21,51 +21,38 @@
 
 将完整节点目录放在 `ComfyUI/custom_nodes/`，安装其中 `requirements.txt` 并重启 ComfyUI。这个 requirements 仅包含轻量节点依赖。
 
-## 独立模型环境
+## 当前版本的运行环境
 
-由有实例安装权限的人执行；选择实例中允许写入且能持久保存的目录：
+当前节点使用 `sys.executable`，即运行 ComfyUI 的同一个 Python，启动模型推理子进程。**进程独立，但 Python 依赖环境不独立。**
 
-```bash
-bash ComfyUI/custom_nodes/comfyui_h3_local_optimizer/install_worker.sh /your/writable/path/h3-omni-venv
-```
+因此，节点目录中的轻量 `requirements.txt` 不足以运行模型；模型所需依赖还必须在 ComfyUI 使用的环境中可导入。`worker-requirements.txt` 记录了原方案的版本组合，尚未验证与 RunningHub 当前 H3 镜像兼容，不能直接覆盖平台已有依赖。
 
-脚本通过系统 `python3 -m venv` 建立完全独立环境，使用 Torch 2.6.0、Transformers 4.52.3 和 AutoAWQ 0.2.9。运行实例须有与此 CUDA 构建兼容的驱动、Linux/NVIDIA GPU。依赖包是否能在 RunningHub 当前镜像成功安装尚未验证；不能用“环境检查成功”代替真实模型加载测试。
+仓库保留的 `install_worker.sh` 用于创建独立环境，但当前节点不会自动使用该环境。仅执行此脚本并不能完成当前版本的部署。需要部署方确认同一解释器中的 Torch、Transformers、AutoAWQ 和音频依赖能够与 H3 共存。
 
-该版本组合来自官方 AWQ 使用建议并参考源码适配。AutoAWQ 是旧依赖，因此采用子进程隔离，不覆盖 H3 的 Python 包。普通 AWQ 加载路线与官方特制 low-VRAM 演示并非同一实现，不能照搬其显存数字作为本节点保证。
+## 模型准备与名称解析
 
-## 模型准备
+运行前准备完整 Qwen2.5-Omni-7B-AWQ 模型目录，包括权重分片、索引、配置、tokenizer 和处理器文件。推理阶段离线，不会自动下载。
 
-下载[官方 Qwen2.5-Omni-7B-AWQ](https://huggingface.co/Qwen/Qwen2.5-Omni-7B-AWQ)的**完整仓库快照**，包括所有 safetensors 分片、索引、配置、处理器、tokenizer 和 `spk_dict.pt`。不得只上传一个量化权重文件。可在具备下载环境的机器准备后，通过平台允许的模型上传方式部署。
+界面仅选择 `model_name`，不填写模型地址。当前代码依次通过 ComfyUI 的 `LLM`、`checkpoints` 路径解析接口查找名称，随后尝试同名相对目录。部署方必须确认解析结果是包含 `config.json` 的完整模型目录；下拉列表中出现名称不代表模型已安装。
 
-示例位置：`ComfyUI/models/LLM/Qwen2.5-Omni-7B-AWQ/`。
-
-然后用独立 Python 运行预检查：
-
-```bash
-/your/writable/path/h3-omni-venv/bin/python \
-  ComfyUI/custom_nodes/comfyui_h3_local_optimizer/check_environment.py \
-  --model /absolute/path/ComfyUI/models/LLM/Qwen2.5-Omni-7B-AWQ
-```
-
-预检查只检查依赖导入、CUDA 和必要文件，不加载大模型，不执行推理。通过后还需实际运行一次优化任务。
+`check_environment.py` 可用于检查依赖、CUDA 和文件，但应使用运行 ComfyUI 的 Python 执行。预检查不会加载模型，不能代替实际优化任务。
 
 ## 节点配置
 
 导入工作流，在 **323：H3 · 本地24G Skill优化** 中设置：
 
-| 参数 | 默认/建议 |
+| 参数 | 默认 / 建议 |
 |---|---|
-| `worker_python` | 改成真实独立环境 Python 绝对路径；默认 `/opt/h3-omni-venv/bin/python` 只是常见路径示例，安装脚本不会自动创建它 |
-| `model_path` | `LLM/Qwen2.5-Omni-7B-AWQ`，相对于 ComfyUI/models；也支持绝对目录 |
-| `skill_path` | 留空读取节点内置完整 H3 skill |
-| `image_side` | 448，分析图像长边上限，不改变 H3 生成分辨率 |
-| `video_frames` | 8，覆盖 H3 有效参考时段的均匀采样，包含开头和结尾 |
-| `audio_chunk_seconds` | 6，分块覆盖全部音频，不只听前6秒 |
+| `model_name` | Qwen2.5-Omni-7B-AWQ；需由部署环境正确解析 |
+| `skill_path` | 留空，读取节点内置 H3 Skill |
+| `image_side` | 448，分析图像长边上限，不改变生成分辨率 |
+| `video_frames` | 8，均匀采样视频有效参考时段 |
+| `audio_chunk_seconds` | 6，分块覆盖全部音频 |
 | `max_new_tokens` | 3072，最终提示词输出上限 |
-| `timeout_seconds` | 1800，本地加载和多次推理可能较慢 |
-| `refresh` | 增大数字触发重新优化，输入不变时遵循 ComfyUI 缓存 |
+| `timeout_seconds` | 1800，优化超时秒数 |
+| `refresh` | 增大数字触发重新优化 |
 
-模型加载时关闭语音输出组件，仅用 Thinker 生成文字。AWQ 浮点排除列表同时保护视觉、音频编码器与 lm_head，匹配官方权重结构。
+当前界面没有 `worker_python` 或 `model_path` 参数。模型加载时关闭语音输出组件，仅用 Thinker 生成文字。
 
 ## 24GB 执行流程与实际限制
 
@@ -94,6 +81,6 @@ bash ComfyUI/custom_nodes/comfyui_h3_local_optimizer/install_worker.sh /your/wri
 
 已验证素材分块覆盖、时间戳、有效引用编号、完整skill传递、AWQ配置、子进程离线标志与取消清理、125条工作流连线及四个加载顺序依赖。测试用合成素材和模拟推理，没有真实 AWQ 模型结果。
 
-**未验证：RunningHub 节点安装、独立环境依赖安装、真实 AWQ 推理、24GB峰值显存、最终 H3 视频生成。**这是一份可供部署验证的本地版，不是已经在 RunningHub 跑通的应用。
+**未验证：RunningHub 节点安装、同环境依赖兼容性、真实 AWQ 推理、24GB峰值显存、最终 H3 视频生成。**这是一份可供部署验证的本地版，不是已经在 RunningHub 跑通的应用。
 
 参考：[官方AWQ说明](https://huggingface.co/Qwen/Qwen2.5-Omni-7B-AWQ)、[Qwen2.5-Omni官方代码](https://github.com/QwenLM/Qwen2.5-Omni)、[Transformers 4.52.3 Omni实现](https://github.com/huggingface/transformers/blob/v4.52.3/src/transformers/models/qwen2_5_omni/modeling_qwen2_5_omni.py)。
