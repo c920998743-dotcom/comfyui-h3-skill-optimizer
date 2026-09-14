@@ -136,3 +136,31 @@ class OutputRepairTests(unittest.TestCase):
         result = optimize_job(job, infer, 3072)['prompt']
         self.assertIn('词10', result)
         self.assertNotIn('H3_LITERAL_', result)
+
+    def test_each_timed_shot_receives_global_scene_subjects_and_skill(self):
+        job = dict(self.job(), prompt='全程使用粉色直播台场景。0-3秒女生微笑；3-5秒递近镜头。',
+                   rules='## 5. detailed_description\nKeep consistent scene identity.')
+        calls = []
+        def infer(prompt, *args):
+            if '仅改写这个镜头' in prompt:
+                calls.append(prompt)
+                return '<Subject 1> smiles in the pink studio.'
+            return SECTIONS[field(prompt)]
+        optimize_job(job, infer, 3072)
+        self.assertEqual(len(calls), 2)
+        for prompt in calls:
+            self.assertIn('全程使用粉色直播台场景', prompt)
+            self.assertIn('<Subject 1> from <Picture 1>', prompt)
+            self.assertIn('Keep consistent scene identity.', prompt)
+        self.assertNotIn('递近镜头', calls[0])
+        self.assertNotIn('女生微笑', calls[1])
+
+    def test_timed_shot_restores_quoted_product_name(self):
+        job = dict(self.job(), prompt='产品名称为“玫瑰唇釉”。0-5秒展示产品。')
+        def infer(prompt, *args):
+            if '仅改写这个镜头' in prompt:
+                return 'The label reads H3_LITERAL_1.'
+            return SECTIONS[field(prompt)]
+        result = optimize_job(job, infer, 3072)['prompt']
+        self.assertIn('The label reads 玫瑰唇釉.', result)
+        self.assertNotIn('H3_LITERAL_', result)

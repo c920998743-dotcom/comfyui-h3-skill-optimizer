@@ -89,6 +89,7 @@ def optimize_job(job, infer, max_new_tokens):
     sections = {}
     attempts = []
     timeline = timed_segments(job['prompt'], job['effective_duration'])
+    global_context = re.split(r'\d+(?:\.\d+)?\s*[-–—~至]\s*\d+(?:\.\d+)?\s*秒', job['prompt'], maxsplit=1)[0] if timeline else job['prompt']
     literals = [a or b for a, b in re.findall(r'“([^”]+)”|「([^」]+)」', job['prompt'])]
     literal_tokens = {f'H3_LITERAL_{i}': value for i, value in enumerate(dict.fromkeys(literals), 1)}
 
@@ -139,11 +140,15 @@ def optimize_job(job, infer, max_new_tokens):
                         '把下面这个镜头改写成英文视频提示词。只写这一个镜头，不写标题、编号、时间。'
                         '必须包含原镜头的全部动作。只描述视觉动作，不添加台词和字幕。'
                         '角色参考图只用于人物外观，场景以场景参考图为准。最多100个英文单词。'
-                        '\n素材外观供参考：' + json.dumps(observations, ensure_ascii=False)
+                        '沿用已定义主体标签，不要重新分配身份或改变参考关系。'
+                        '\n全局用户要求（台词字幕由程序回填，勿在视觉描述中添加）：' + protect(global_context)
+                        + '\n已定义主体：' + sections.get('subject_definitions', '')
+                        + '\n适用 Skill 规则（只使用当前镜头的内容规则，标题和时间由程序生成）：' + '\n'.join(relevant)
+                        + '\n素材外观仅作为证据，不能覆盖用户指定场景：' + json.dumps(observations, ensure_ascii=False)
                         + '\n仅改写这个镜头，必须保留动作（例如微笑、开盖），不要将人物白底照片的背景用于目标场景：' + visual_direction)
                     if attempts:
                         shot_request += '\n上次校验错误：' + attempts[-1]['error']
-                    prose = infer(shot_request, None, min(max_new_tokens, 1024)).strip()
+                    prose = restore(infer(shot_request, None, min(max_new_tokens, 1024)).strip())
                     for kind, words in cues:
                         if kind == '字幕':
                             prose += ' On-screen text reads ' + json.dumps(words, ensure_ascii=False) + '.'
