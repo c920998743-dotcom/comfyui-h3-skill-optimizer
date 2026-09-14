@@ -45,16 +45,16 @@ class LocalTests(unittest.TestCase):
         calls = []
         def infer(prompt, asset, tokens):
             calls.append((prompt,asset))
-            return 'observed facts' if asset else 'final result'
+            return 'observed facts' if asset else dict(subject_definitions='<Subject 1> from <Picture 1>', summary='room', retention_analysis='preserve', detailed_description='[Shot 1] A room.', overall_soundscape='Silence.', non_diegetic_music='N/A.')[prompt.split('H3 field ', 1)[1].split('.', 1)[0]]
         with tempfile.TemporaryDirectory() as tmp:
             job = export_job(tmp, '台词保持你好', 362, 15, 544, 960, '',
                              {'image_1': np.zeros((1,16,16,3))},448,8,6)
             result = optimize_job(job,infer,3072)
-        self.assertEqual(len(calls),2)
+        self.assertEqual(len(calls),7)
         self.assertIsNone(calls[-1][1])
-        self.assertIn('observed facts',calls[-1][0])
-        self.assertIn('Full-Reference Mode Rewrite Output Format Guide', calls[-1][0])
-        self.assertEqual(result['prompt'],'final result')
+        self.assertIn('observed facts',calls[1][0])
+        self.assertTrue(any('Reference Labels and Definitions' in call[0] for call in calls))
+        self.assertTrue(result['prompt'].startswith('subject_definitions:'))
 
     def test_awq_skip_list_matches_float_components(self):
         from types import SimpleNamespace
