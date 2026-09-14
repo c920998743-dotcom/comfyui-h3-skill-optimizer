@@ -25,6 +25,8 @@ class ProcessTests(unittest.TestCase):
         class Process:
             returncode=0
             def __init__(self, command, **kwargs):
+                assert command[1] == '-I'
+                assert kwargs['env']['PYTHONNOUSERSITE']=='1'
                 self.assert_offline=kwargs['env']['HF_HUB_OFFLINE']=='1'
                 events.append('offline' if self.assert_offline else 'online')
                 jobpath=Path(command[command.index('--job')+1])
@@ -37,11 +39,12 @@ class ProcessTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             folder.models_dir=tmp
-            model=Path(tmp)/'model';model.mkdir()
+            model=Path(tmp)/'LLM'/'model';model.mkdir(parents=True)
             (model/'config.json').write_text('{}')
             with patch.dict(sys.modules,{'folder_paths':folder,'comfy':comfy,'comfy.model_management':mm}),\
-                 patch('comfyui_h3_local_optimizer.nodes.subprocess.Popen',Process):
-                result=H3LocalSkillOptimizer().optimize('安静房间',15,362,544,960,sys.executable,str(model))
+                 patch('comfyui_h3_local_optimizer.nodes.subprocess.Popen',Process),\
+                 patch('comfyui_h3_local_optimizer.nodes.worker_python',return_value=Path(sys.executable)):
+                result=H3LocalSkillOptimizer().optimize('安静房间',15,362,544,960,'model')
         self.assertEqual(events,['unload','empty','offline','exited'])
         self.assertIn('quiet room',result['result'][0])
 
@@ -61,11 +64,13 @@ class ProcessTests(unittest.TestCase):
             def wait(self):events.append('wait')
         with tempfile.TemporaryDirectory() as tmp:
             folder.models_dir=tmp
-            (Path(tmp)/'config.json').write_text('{}')
+            model=Path(tmp)/'LLM'/'model';model.mkdir(parents=True)
+            (model/'config.json').write_text('{}')
             with patch.dict(sys.modules,{'folder_paths':folder,'comfy':comfy,'comfy.model_management':mm}),\
-                 patch('comfyui_h3_local_optimizer.nodes.subprocess.Popen',Process):
+                 patch('comfyui_h3_local_optimizer.nodes.subprocess.Popen',Process),\
+                 patch('comfyui_h3_local_optimizer.nodes.worker_python',return_value=Path(sys.executable)):
                 with self.assertRaisesRegex(RuntimeError,'user cancelled'):
-                    H3LocalSkillOptimizer().optimize('x',15,362,544,960,sys.executable,tmp)
+                    H3LocalSkillOptimizer().optimize('x',15,362,544,960,'model')
         self.assertEqual(events,['kill','wait'])
 
 

@@ -1,5 +1,4 @@
 import json
-import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -7,6 +6,7 @@ import time
 
 from .core import rules_digest, validate_prompt
 from .media import export_job
+from .runtime import worker_python, worker_environment
 
 
 class H3LocalSkillOptimizer:
@@ -49,24 +49,22 @@ class H3LocalSkillOptimizer:
                  timeout_seconds=1800, refresh=0, **media):
         import folder_paths
         import comfy.model_management as mm
-        import sys
-        python = Path(sys.executable)
+        python = worker_python()
         resolver = getattr(folder_paths, 'get_full_path', None)
-        model_value = (resolver('LLM', model_name) if resolver else None) or (resolver('checkpoints', model_name) if resolver else None) or model_name
+        model_value = (resolver('LLM', model_name) if resolver else None) or (resolver('checkpoints', model_name) if resolver else None) or str(Path(folder_paths.models_dir) / 'LLM' / model_name)
         model = Path(model_value)
         if not (model / 'config.json').is_file():
-            raise ValueError('找不到本地AWQ模型config.json，请上传完整模型目录并检查model_path。')
+            raise ValueError('找不到所选 AWQ 模型，请将完整模型目录放入 ComfyUI/models/LLM/' + model_name + '。')
         # Release Comfy-managed GPU models before starting the separate CUDA process.
         mm.unload_all_models()
         mm.soft_empty_cache()
         with tempfile.TemporaryDirectory(prefix='h3_local_') as tmp:
             job = export_job(tmp, prompt, target_frames, duration_seconds, width, height,
                              skill_path, media, image_side, video_frames, audio_chunk_seconds)
-            command = [str(python), str(Path(__file__).with_name('worker.py')),
+            command = [str(python), '-I', str(Path(__file__).with_name('worker.py')),
                        '--job', str(Path(tmp) / 'job.json'), '--model', str(model),
                        '--max-new-tokens', str(max_new_tokens)]
-            env = dict(os.environ, HF_HUB_OFFLINE='1', TRANSFORMERS_OFFLINE='1',
-                       TOKENIZERS_PARALLELISM='false', PYTHONIOENCODING='utf-8')
+            env = worker_environment()
             # Comfy CUDA device selection must also apply to the isolated process.
             device = mm.get_torch_device()
             if getattr(device, 'type', '') != 'cuda':

@@ -7,7 +7,7 @@
 本包是自定义节点源码和工作流，不是 RunningHub 已上架应用。**上传 JSON 不会自动安装 Python 节点、模型或独立环境。**目前尚未核实你账号所在实例是否允许这些操作：
 
 - 安装本包的 ComfyUI 自定义节点及前端扩展；
-- 在 ComfyUI 使用的 Python 环境中提供兼容依赖，并允许启动子进程；
+- 在节点目录创建专用虚拟环境、安装依赖，并允许启动子进程；
 - 存放、读取完整 AWQ 模型目录；
 - 使用 CUDA 并释放之前加载的模型。
 
@@ -23,19 +23,19 @@
 
 ## 当前版本的运行环境
 
-当前节点使用 `sys.executable`，即运行 ComfyUI 的同一个 Python，启动模型推理子进程。**进程独立，但 Python 依赖环境不独立。**
+当前节点使用自身 `.omni-env` 下的独立 Python。由有安装权限的人在节点目录运行 `python install_runtime.py`；无需填写安装目录或节点路径参数。
 
-因此，节点目录中的轻量 `requirements.txt` 不足以运行模型；模型所需依赖还必须在 ComfyUI 使用的环境中可导入。`worker-requirements.txt` 记录了原方案的版本组合，尚未验证与 RunningHub 当前 H3 镜像兼容，不能直接覆盖平台已有依赖。
+脚本安装 CUDA 12.8 Torch 2.7.1、Transformers 4.52.3 和 AutoAWQ 0.2.9，依赖写入专用环境，节点不会退回 ComfyUI 的共享 Python。平台须允许创建虚拟环境、安装依赖和启动子进程。环境目录不随 GitHub 或 ZIP 分发，需要在目标机器安装。
 
-仓库保留的 `install_worker.sh` 用于创建独立环境，但当前节点不会自动使用该环境。仅执行此脚本并不能完成当前版本的部署。需要部署方确认同一解释器中的 Torch、Transformers、AutoAWQ 和音频依赖能够与 H3 共存。
+安装完成后重启 ComfyUI。`install_worker.sh` 是同一安装脚本的 Linux 入口，不再接收环境路径。
 
 ## 模型准备与名称解析
 
 运行前准备完整 Qwen2.5-Omni-7B-AWQ 模型目录，包括权重分片、索引、配置、tokenizer 和处理器文件。推理阶段离线，不会自动下载。
 
-界面仅选择 `model_name`，不填写模型地址。当前代码依次通过 ComfyUI 的 `LLM`、`checkpoints` 路径解析接口查找名称，随后尝试同名相对目录。部署方必须确认解析结果是包含 `config.json` 的完整模型目录；下拉列表中出现名称不代表模型已安装。
+界面仅选择 `model_name`，不填写模型地址。当前代码依次通过 ComfyUI 的 `LLM`、`checkpoints` 路径解析接口查找名称，随后查找 `ComfyUI/models/LLM/<模型名称>` 目录。部署方必须确认解析结果是包含 `config.json` 的完整模型目录；下拉列表中出现名称不代表模型已安装。
 
-`check_environment.py` 可用于检查依赖、CUDA 和文件，但应使用运行 ComfyUI 的 Python 执行。预检查不会加载模型，不能代替实际优化任务。
+`check_environment.py` 可用于检查依赖、CUDA 和文件，但应使用 `.omni-env/bin/python`（Windows 为 `.omni-env/Scripts/python.exe`）执行。预检查不会加载模型，不能代替实际优化任务。
 
 ## 节点配置
 
@@ -81,6 +81,6 @@
 
 已验证素材分块覆盖、时间戳、有效引用编号、完整skill传递、AWQ配置、子进程离线标志与取消清理、125条工作流连线及四个加载顺序依赖。测试用合成素材和模拟推理，没有真实 AWQ 模型结果。
 
-**未验证：RunningHub 节点安装、同环境依赖兼容性、真实 AWQ 推理、24GB峰值显存、最终 H3 视频生成。**这是一份可供部署验证的本地版，不是已经在 RunningHub 跑通的应用。
+**未验证：RunningHub 节点安装、专用环境部署兼容性、真实 AWQ 推理、24GB峰值显存、最终 H3 视频生成。**这是一份可供部署验证的本地版，不是已经在 RunningHub 跑通的应用。
 
 参考：[官方AWQ说明](https://huggingface.co/Qwen/Qwen2.5-Omni-7B-AWQ)、[Qwen2.5-Omni官方代码](https://github.com/QwenLM/Qwen2.5-Omni)、[Transformers 4.52.3 Omni实现](https://github.com/huggingface/transformers/blob/v4.52.3/src/transformers/models/qwen2_5_omni/modeling_qwen2_5_omni.py)。

@@ -105,15 +105,23 @@ ComfyUI/
 python -m pip install -r custom_nodes/comfyui_h3_local_optimizer/requirements.txt
 ```
 
-实际模型推理还需要 Torch、Transformers、AutoAWQ、音频处理等依赖。版本记录见 [worker-requirements.txt](comfyui_h3_local_optimizer/worker-requirements.txt)。
+### 安装 Omni 专用环境
 
-**当前节点使用 ComfyUI 自身的 Python 启动子进程，因此依赖也必须在该环境中可用。** 子进程隔离不等于 Python 依赖隔离；现有 H3 环境是否兼容这些版本需要先验证，不能直接覆盖平台环境的依赖。
+在节点目录运行一次：
+
+```bash
+python install_runtime.py
+```
+
+脚本自动创建节点目录下的 `.omni-env`，安装 CUDA 12.8 的 Torch 2.7.1、Transformers 4.52.3 和 AutoAWQ 0.2.9。安装只写入专用环境，不修改 ComfyUI 的 Python 包；需要联网下载依赖，但不会重复下载模型。
+
+节点自动选择专用解释器，并使用隔离模式启动 worker，界面无需输入路径。更新节点后需重启 ComfyUI。专用环境缺失时会提示运行安装脚本，不会退回共享环境。
 
 ### 3. 准备模型
 
 本项目不包含模型权重，也不会在执行优化时自动下载模型。运行环境需提前提供完整的 `Qwen2.5-Omni-7B-AWQ` 模型及处理器文件。
 
-节点界面选择模型名称，无需输入模型地址。当前代码通过 ComfyUI 的 `LLM`、`checkpoints` 路径解析接口查找该名称，随后尝试同名相对目录。**部署端需确保该名称能解析到包含 `config.json` 的完整模型目录；仅出现下拉选项不能证明模型已经安装。**
+节点界面选择模型名称，无需输入模型地址。当前代码通过 ComfyUI 的 `LLM`、`checkpoints` 路径解析接口查找该名称，随后查找 `ComfyUI/models/LLM/<模型名称>` 目录。**部署端需确保该名称能解析到包含 `config.json` 的完整模型目录；仅出现下拉选项不能证明模型已经安装。**
 
 ### 4. 导入并连接工作流
 
@@ -190,7 +198,7 @@ non_diegetic_music:
 
 ### 找不到模型怎么办？
 
-让部署方检查所选名称能否解析到完整模型目录，且目录包含 `config.json` 及其余模型、处理器文件。当前错误信息可能仍提到旧字段 `model_path`，界面实际使用的是 `model_name`。
+让部署方检查所选名称能否解析到完整模型目录，且目录包含 `config.json` 及其余模型、处理器文件。界面使用 `model_name` 选择模型。
 
 ### 为什么有四个“优化完成后加载”节点？
 
@@ -205,6 +213,8 @@ non_diegetic_music:
 先减少参考素材数量和需求长度。显存不足可降低图像分析尺寸或视频采样帧数；输出达到 token 上限时可适当提高 `max_new_tokens`。格式或引用校验失败时，检查需求后修改 `refresh` 重新优化。
 
 ## 验证状态
+
+2026-09-14：5090 专用环境已安装，AutoAWQ/Omni 导入、CUDA 识别及完整模型文件预检查通过；原 `PytorchGELUTanh` 导入错误已排除。GPU 正在处理其他任务，真实推理仍待验证。
 
 | 检查项 | 状态 |
 |---|---|
