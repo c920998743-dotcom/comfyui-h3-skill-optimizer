@@ -1,0 +1,14 @@
+{
+  "offline_tests": 9,
+  "result": "PASS",
+  "nodes": 126,
+  "links": 125,
+  "syntax_python": "PASS",
+  "syntax_javascript": "PASS",
+  "widget_schema": "PASS",
+  "bundled_skill": "exact source copy",
+  "independent_review": "no confirmed blocker; Transformers 4.52.3 source contract reviewed",
+  "live_model_inference": "NOT RUN",
+  "runninghub_installation": "NOT VERIFIED",
+  "24GB_peak_memory": "NOT MEASURED"
+}
