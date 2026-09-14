@@ -1,0 +1,12 @@
+# Install only inside the isolated worker environment, NOT ComfyUI's environment.
+torch==2.6.0
+torchvision==0.21.0
+torchaudio==2.6.0
+transformers==4.52.3
+autoawq==0.2.9
+accelerate==1.7.0
+numpy>=1.24,<2
+Pillow>=10,<12
+soundfile>=0.12,<0.14
+scipy>=1.10,<1.16
+librosa==0.10.2.post1
